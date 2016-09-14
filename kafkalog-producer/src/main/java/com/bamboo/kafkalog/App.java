@@ -17,7 +17,7 @@ public class App {
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SSS");
 		for (int i = 0; i < 20; i++) {
             LOGGER.info("Info |" + sdf.format(new Date()) +  "|[" + i + "]");
-            Thread.sleep(5000);
+            Thread.sleep(500);
         }
 		
 	}
