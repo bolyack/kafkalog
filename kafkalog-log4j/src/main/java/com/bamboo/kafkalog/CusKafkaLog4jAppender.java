@@ -79,18 +79,23 @@ public class CusKafkaLog4jAppender extends AppenderSkeleton {
 	}
 	
 	private void pushLogKafka(String mesg) {
+		ProducerRecord<String, String> data = null;
 		try {
 			
 			if(topic == null && "".equals(topic)) {
 				throw new Exception("topic must be specified by the Kafka log4j appender");
 			}
 			
-			ProducerRecord<String, String> data = new ProducerRecord<String, String>(topic, mesg);
+			data = new ProducerRecord<String, String>(topic, mesg);
 			
 			producer.send(data);
 			
 		} catch (Exception e) {
 			LogLog.error("com.bamboo.kafkalog.CusKafkaLog4jAppender-pushLogKafka->producer send message error", e);
+		} finally {
+			if (null != data) {
+				data = null;
+			}
 		}
 	}
 
