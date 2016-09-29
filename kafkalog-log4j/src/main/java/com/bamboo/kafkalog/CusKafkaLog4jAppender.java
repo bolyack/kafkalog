@@ -1,11 +1,9 @@
 package com.bamboo.kafkalog;
 
 import java.util.Properties;
+import java.util.concurrent.Future;
 
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.*;
 import org.apache.log4j.AppenderSkeleton;
 import org.apache.log4j.helpers.LogLog;
 import org.apache.log4j.spi.LoggingEvent;
@@ -32,6 +30,7 @@ public class CusKafkaLog4jAppender extends AppenderSkeleton {
 	private String acks;
 	private String retries;
 	private String clientId;
+	private int maxBlockMs;
 	
 	private Producer<String, String> producer = null;
 
@@ -58,6 +57,11 @@ public class CusKafkaLog4jAppender extends AppenderSkeleton {
 			props.put("bootstrap.servers", brokerList);
 			props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
 			props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
+			if (maxBlockMs != 0) {
+				props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs);
+			} else {
+				props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 500);
+			}
 			if (requestTimeOutMS != 0) {
 				props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeOutMS);
 			}
@@ -87,8 +91,9 @@ public class CusKafkaLog4jAppender extends AppenderSkeleton {
 			}
 			
 			data = new ProducerRecord<String, String>(topic, mesg);
-			
-			producer.send(data);
+
+			Future<RecordMetadata> future = producer.send(data);
+			future.get();
 			
 		} catch (Exception e) {
 			LogLog.error("com.bamboo.kafkalog.CusKafkaLog4jAppender-pushLogKafka->producer send message error", e);
@@ -165,4 +170,11 @@ public class CusKafkaLog4jAppender extends AppenderSkeleton {
 		this.clientId = clientId;
 	}
 
+	public int getMaxBlockMs() {
+		return maxBlockMs;
+	}
+
+	public void setMaxBlockMs(int maxBlockMs) {
+		this.maxBlockMs = maxBlockMs;
+	}
 }
