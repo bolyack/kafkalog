@@ -15,7 +15,7 @@ public class App {
 
 	public static void main(String[] args) throws Exception {
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SSS");
-		for (int i = 0; i < 20; i++) {
+		for (int i = 0; i < 200; i++) {
             LOGGER.info("Info |" + sdf.format(new Date()) +  "|[" + i + "]");
             Thread.sleep(500);
         }

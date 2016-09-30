@@ -31,6 +31,7 @@ public class CusKafkaLog4jAppender extends AppenderSkeleton {
 	private String retries;
 	private String clientId;
 	private int maxBlockMs;
+	private boolean syncSend = true; //是否异步发送消息
 	
 	private Producer<String, String> producer = null;
 
@@ -54,13 +55,13 @@ public class CusKafkaLog4jAppender extends AppenderSkeleton {
 			if (null == brokerList && "".equals(brokerList)) {
 				throw new Exception("The bootstrap servers property should be specified");
 			}
-			props.put("bootstrap.servers", brokerList);
+			props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
 			props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
 			props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
 			if (maxBlockMs != 0) {
 				props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs);
 			} else {
-				props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 500);
+				props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 6000);
 			}
 			if (requestTimeOutMS != 0) {
 				props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeOutMS);
@@ -78,26 +79,34 @@ public class CusKafkaLog4jAppender extends AppenderSkeleton {
 			producer = new KafkaProducer<String, String>(props);
 			
 		} catch (Exception e) {
-			LogLog.error("com.bamboo.kafkalog.CusKafkaLog4jAppender-activateOptions has some config error!", e);
+			LogLog.error("CusKafkaLog4jAppender-activateOptions has some config error!", e);
 		}
 	}
 	
 	private void pushLogKafka(String mesg) {
 		ProducerRecord<String, String> data = null;
+		Future<RecordMetadata> future = null;
 		try {
 			
 			if(topic == null && "".equals(topic)) {
 				throw new Exception("topic must be specified by the Kafka log4j appender");
 			}
-			
-			data = new ProducerRecord<String, String>(topic, mesg);
 
-			Future<RecordMetadata> future = producer.send(data);
-			future.get();
+			//是否异步发送
+			if (syncSend) {
+				new Thread(new PushKafkaThread(producer, topic, mesg)).start();;
+			} else {
+				data = new ProducerRecord<String, String>(topic, mesg);
+				future = producer.send(data);
+				future.get();
+			}
 			
 		} catch (Exception e) {
-			LogLog.error("com.bamboo.kafkalog.CusKafkaLog4jAppender-pushLogKafka->producer send message error", e);
+			LogLog.error("producer send message error: topic=>" + topic + ", mesg=>" + mesg, e);
 		} finally {
+			if (null != future) {
+				future.cancel(true);
+			}
 			if (null != data) {
 				data = null;
 			}
@@ -107,9 +116,51 @@ public class CusKafkaLog4jAppender extends AppenderSkeleton {
 	public void close() {
 		if (!this.closed) {
 			this.closed = true;
+		}
+		if (null != producer) {
 			producer.close();
 		}
 	}
+
+
+	/**
+	 * 内部线程：推送消息(做异步)
+	 */
+	class PushKafkaThread implements Runnable {
+
+		private Producer<String, String> producer;
+		private String topic;
+		private String mesg;
+
+		public PushKafkaThread(Producer<String, String> producer, String topic, String mesg) {
+			this.producer = producer;
+			this.topic = topic;
+			this.mesg = mesg;
+		}
+
+		public void run() {
+			ProducerRecord<String, String> data = null;
+			Future<RecordMetadata> future = null;
+			try {
+				data = new ProducerRecord<String, String>(topic, mesg);
+				future = producer.send(data);
+				future.get();
+			} catch (Exception e) {
+				LogLog.error("kafka-log_pushlog-thread-exception: topic=>" + topic + ", mesg=>" + mesg, e);
+			} finally {
+				if (null != future) {
+					future.cancel(true);
+				}
+				if (null != data) {
+					data = null;
+				}
+			}
+		}
+
+	}
+
+
+
 
 	public boolean requiresLayout() {
 		return false;
@@ -176,5 +227,13 @@ public class CusKafkaLog4jAppender extends AppenderSkeleton {
 
 	public void setMaxBlockMs(int maxBlockMs) {
 		this.maxBlockMs = maxBlockMs;
+	}
+
+	public boolean isSyncSend() {
+		return syncSend;
+	}
+
+	public void setSyncSend(boolean syncSend) {
+		this.syncSend = syncSend;
 	}
 }
