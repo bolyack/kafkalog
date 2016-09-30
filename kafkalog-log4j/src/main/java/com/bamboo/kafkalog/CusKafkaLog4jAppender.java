@@ -26,11 +26,11 @@ public class CusKafkaLog4jAppender extends AppenderSkeleton {
 	private String topic;
 	//multiple brokers are separated by comma ",".
 	private String brokerList;
-	private int requestTimeOutMS;
+	private int requestTimeOutMS; //请求时间
 	private String acks;
 	private String retries;
 	private String clientId;
-	private int maxBlockMs;
+	private int maxBlockMs; //服务阻塞最大时间(毫秒)
 	private boolean syncSend = true; //是否异步发送消息
 	
 	private Producer<String, String> producer = null;
