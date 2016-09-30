@@ -23,6 +23,11 @@ log4j.appender.kafka.layout.ConversionPattern=%d [%-5p] [%t] - [%l] %m%n
  */
 public class CusKafkaLog4jAppender extends AppenderSkeleton {
 
+	/**
+	 * 内部产生的日志标识，避免重复循环推送
+	 */
+	private static final String INNER_CONSTANTS = "CusKafkaLog4jAppender_Exception.";
+
 	private String topic;
 	//multiple brokers are separated by comma ",".
 	private String brokerList;
@@ -30,7 +35,7 @@ public class CusKafkaLog4jAppender extends AppenderSkeleton {
 	private String acks;
 	private String retries;
 	private String clientId;
-	private int maxBlockMs; //服务阻塞最大时间(毫秒)
+	private int maxBlockMs; //服务阻塞最大时间(毫秒)，如服务连接不上(各集群IP均是错误地址)等。
 	private boolean syncSend = true; //是否异步发送消息
 	
 	private Producer<String, String> producer = null;
@@ -44,7 +49,10 @@ public class CusKafkaLog4jAppender extends AppenderSkeleton {
 			} else {
 				msg = this.layout.format(event);
 			}
-			pushLogKafka(msg);
+			//不推送本功能产生的日志， 避免循环推送
+			if (!msg.contains(INNER_CONSTANTS)) {
+				pushLogKafka(msg);
+			}
 		}
 	}
 	
@@ -79,7 +87,7 @@ public class CusKafkaLog4jAppender extends AppenderSkeleton {
 			producer = new KafkaProducer<String, String>(props);
 			
 		} catch (Exception e) {
-			LogLog.error("CusKafkaLog4jAppender-activateOptions has some config error!", e);
+			LogLog.error(INNER_CONSTANTS + "activateOptions has some config error!", e);
 		}
 	}
 	
@@ -94,7 +102,9 @@ public class CusKafkaLog4jAppender extends AppenderSkeleton {
 
 			//是否异步发送
 			if (syncSend) {
-				new Thread(new PushKafkaThread(producer, topic, mesg)).start();;
+				Thread t = new Thread(new PushKafkaThread(producer, topic, mesg));
+				t.setName("Thread-CusKafkaLog4jAppender");
+				t.start();
 			} else {
 				data = new ProducerRecord<String, String>(topic, mesg);
 				future = producer.send(data);
@@ -102,7 +112,7 @@ public class CusKafkaLog4jAppender extends AppenderSkeleton {
 			}
 			
 		} catch (Exception e) {
-			LogLog.error("producer send message error: topic=>" + topic + ", mesg=>" + mesg, e);
+			LogLog.error(INNER_CONSTANTS + "producer send message error: topic=>" + topic + ", mesg=>" + mesg, e);
 		} finally {
 			if (null != future) {
 				future.cancel(true);
@@ -146,7 +156,7 @@ public class CusKafkaLog4jAppender extends AppenderSkeleton {
 				future = producer.send(data);
 				future.get();
 			} catch (Exception e) {
-				LogLog.error("kafka-log_pushlog-thread-exception: topic=>" + topic + ", mesg=>" + mesg, e);
+				LogLog.error(INNER_CONSTANTS + "pushlog-thread: topic=>" + topic + ", mesg=>[" + mesg + "]", e);
 			} finally {
 				if (null != future) {
 					future.cancel(true);
